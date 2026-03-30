@@ -1,0 +1,14 @@
+# Toy experiments (JAX)
+jax
+jaxlib
+dm-haiku
+optax
+pyyaml
+matplotlib
+
+# MNIST experiment (PyTorch)
+torch
+torchvision
+scikit-learn
+tqdm
+numpy

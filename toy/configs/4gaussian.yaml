@@ -1,0 +1,19 @@
+distribution: four_gaussian
+w_net: positional
+
+N: 4096
+steps: 128
+T_tot: 1.0
+D: 0.05
+guidance_strength: 2.0
+L: 5.0
+beta: 0.1
+lr: 1.0e-3
+total_epochs: 1501
+
+target_pos: [0.0, 0.0]
+ns_minval: -5.0
+ns_maxval: 5.0
+
+log_every: 50
+reverse_init_std: 0.25

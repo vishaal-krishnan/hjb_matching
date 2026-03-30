@@ -1,0 +1,20 @@
+distribution: single_gaussian
+w_net: sinusoidal
+use_analytical_nu: true
+
+N: 512
+steps: 100
+T_tot: 1.0
+D: 0.05
+guidance_strength: 2.0
+L: 1.5
+beta: 0.1
+lr: 1.0e-3
+total_epochs: 501
+
+target_pos: [1.0, 0.0]
+ns_minval: -3.0
+ns_maxval: 3.0
+
+log_every: 50
+reverse_init_std: 0.05
