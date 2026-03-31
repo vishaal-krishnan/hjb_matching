@@ -13,3 +13,5 @@ build/
 *.pdf
 *.png
 ckpt.pth
+toy/outputs/
+mnist/outputs/

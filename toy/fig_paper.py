@@ -1,9 +1,10 @@
 """
 NeurIPS-style paper figure.
 
-Each experiment is a column:
-  [Loss curve  +  W(x,t) insets along top]
-  [Generative process panels]
+Each experiment is a column with 3 rows:
+  Row 0: W(x,t) panels
+  Row 1: Generative process panels
+  Row 2: Learning curve
 
 Usage:
     python -m toy.fig_paper
@@ -14,6 +15,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -27,21 +30,18 @@ from toy.train import build_train_fns
 
 EXPERIMENTS = [
     ('4 Gaussians', 'toy/outputs/4gaussians'),
+    ('Two Moons',   'toy/outputs/two_moon'),
     ('Swiss Roll',  'toy/outputs/swiss_roll'),
 ]
 
-W_T_FRACS   = [0.1, 0.4, 0.7, 1.0]
-GEN_T_FRACS = [0.0, 0.5, 1.0]
+T_FRACS = [0.0, 0.33, 0.66, 1.0]
 
-CMAP_W     = 'viridis'
+CMAP_W     = 'viridis_r'
 COLOR_LOSS = '#2c7bb6'
 COLOR_PART = '#d7191c'
 SMOOTH_WIN = 12
 
-# Inset geometry in axes-fraction coords
-INSET_W = 0.20   # width  of each W inset
-INSET_H = 0.30   # height of each W inset
-INSET_Y = 0.66   # bottom of inset strip (top 34% of axes → above the curve)
+LABELS = ['(a)', '(b)', '(c)', '(d)', '(e)']
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -81,17 +81,8 @@ def generative_traj(rollout, w_params, cfg, key):
     return np.array(traj), key
 
 
-def style_loss(ax):
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_linewidth(0.6)
-    ax.spines['bottom'].set_linewidth(0.6)
-    ax.tick_params(labelsize=5.5, width=0.5)
-
-
 def style_spatial(ax):
     ax.set_aspect('equal', adjustable='box')
-    ax.set_anchor('C')
     ax.set_xticks([])
     ax.set_yticks([])
     for sp in ax.spines.values():
@@ -102,27 +93,104 @@ def style_spatial(ax):
 # ── Figure ────────────────────────────────────────────────────────────────────
 
 def build():
-    n_exp  = len(EXPERIMENTS)
-    n_w    = len(W_T_FRACS)
-    n_gen  = len(GEN_T_FRACS)
+    n_exp = len(EXPERIMENTS)
+    n_t   = len(T_FRACS)
 
-    fig = plt.figure(figsize=(3.5 * n_exp, 5.5))
+    # ── Compute dimensions from content ──────────────────────────────────
+    fig_w = 6.75                      # NeurIPS full width
+    margin_l, margin_r = 0.06, 0.02   # figure fraction
+    col_wspace = 0.10                  # figure fraction between columns
+    usable_w = fig_w * (1.0 - margin_l - margin_r - col_wspace * (n_exp - 1) / n_exp)
+    col_w = usable_w / n_exp
+    panel_inner_wspace = 0.06
+    panel_w = col_w / (n_t + (n_t - 1) * panel_inner_wspace * 0.3)
+    panel_h = panel_w                  # square
+
+    loss_h_in  = 0.95                  # loss curve height (increased)
+    header_h   = 0.18                  # row header text height
+    gap_h      = 0.06                  # gap between header and panels
+    title_h    = 0.28                  # column title height
+    bottom_h   = 0.35                  # bottom margin for epoch label
+    cbar_h     = 0.45                  # colorbar row height (bar + ticks + label)
+
+    fig_h = (title_h
+             + 3 * header_h
+             + 2 * panel_h
+             + loss_h_in
+             + 3 * gap_h
+             + 2 * 0.04
+             + bottom_h
+             + cbar_h)
+
+    fig = plt.figure(figsize=(fig_w, fig_h))
     fig.patch.set_facecolor('white')
     plt.rcParams.update({
-        'font.family': 'sans-serif',
-        'font.size': 7,
-        'axes.labelsize': 7,
-        'axes.titlesize': 7,
+        'font.family': 'serif',
+        'font.serif': ['Times New Roman', 'Times', 'DejaVu Serif'],
+        'mathtext.fontset': 'cm',
+        'font.size': 8,
+        'axes.labelsize': 9,
+        'axes.titlesize': 9,
+        'text.color': 'black',
+        'axes.labelcolor': 'black',
+        'xtick.color': 'black',
+        'ytick.color': 'black',
     })
 
-    # One column per experiment
-    outer = gridspec.GridSpec(
-        1, n_exp, figure=fig,
-        wspace=0.32,
-        left=0.09, right=0.97, top=0.93, bottom=0.07,
-    )
+    # Convert to figure fractions
+    def in2frac(inches):
+        return inches / fig_h
+
+    # Vertical positions (bottom-up in figure coords)
+    y_bottom = bottom_h / fig_h
+
+    # Loss row
+    loss_bot = y_bottom
+    loss_top = loss_bot + in2frac(loss_h_in)
+
+    # Loss header
+    loss_hdr = loss_top + in2frac(0.04)
+
+    # Gen row
+    gen_bot = loss_hdr + in2frac(header_h + gap_h)
+    gen_top = gen_bot + in2frac(panel_h)
+
+    # Gen header
+    gen_hdr = gen_top + in2frac(0.04)
+
+    # Colorbar row (between W panels and gen header... no, below W panels)
+    # Actually place colorbar below the W panels, above gen header
+    # Let's place it right under the W row
+
+    # W row
+    w_bot = gen_hdr + in2frac(header_h + gap_h + cbar_h)
+    w_top = w_bot + in2frac(panel_h)
+
+    # Colorbar sits between W panels and gen section
+    cbar_bot = gen_hdr + in2frac(header_h + gap_h + 0.22)
+    cbar_top = cbar_bot + in2frac(0.06)
+
+    # W header
+    w_hdr = w_top + in2frac(0.14)
+
+    # Column title
+    title_y = w_hdr + in2frac(header_h + 0.02)
+
+    # ── Row headers via fig.text ─────────────────────────────────────────
+    x_left = margin_l
+    fig.text(x_left, w_hdr, 'Learned $W$',
+             fontsize=8, va='bottom', ha='left', color='black')
+    fig.text(x_left, gen_hdr, 'Generative process',
+             fontsize=8, va='bottom', ha='left', color='black')
+    fig.text(x_left, loss_hdr, 'Learning curve',
+             fontsize=8, va='bottom', ha='left', color='black')
 
     key = jax.random.PRNGKey(42)
+
+    # Track global vmin/vmax for unified colorbar
+    global_vlo = np.inf
+    global_vhi = -np.inf
+    all_pcolormeshes = []
 
     for col_idx, (label, path) in enumerate(EXPERIMENTS):
         w_params, loss_lst, cfg = load_run(path)
@@ -133,82 +201,87 @@ def build():
         fns     = build_train_fns(w_net, optax.adam(cfg['lr']), cfg, nu_fn=nu_fn)
         rollout = fns['rollout']
 
-        # Each column: 2 rows — loss+W insets | gen panels
-        col_gs = gridspec.GridSpecFromSubplotSpec(
-            2, 1,
-            subplot_spec=outer[col_idx],
-            height_ratios=[2.2, 1.0],
-            hspace=0.32,
-        )
+        # Column horizontal bounds
+        col_total = (1.0 - margin_l - margin_r)
+        col_span = col_total / n_exp
+        col_left = margin_l + col_idx * col_span
+        col_right = col_left + col_span * 0.92
 
-        # ── Loss curve ────────────────────────────────────────────────────
-        ax_loss = fig.add_subplot(col_gs[0])
-        raw = np.array(loss_lst)
-        sm  = smooth(raw)
-        ax_loss.plot(raw, color=COLOR_LOSS, alpha=0.18, linewidth=0.7)
-        ax_loss.plot(np.arange(len(sm)) + SMOOTH_WIN // 2, sm,
-                     color=COLOR_LOSS, linewidth=1.5)
-        ax_loss.set_xlim(0, len(raw))
-        ax_loss.set_ylim(bottom=0)
-        ax_loss.set_xlabel('Epoch', fontsize=6.5, labelpad=2)
-        ax_loss.set_ylabel(r'$\mathcal{L}_{\mathrm{total}}$', fontsize=8, labelpad=2)
-        ax_loss.set_title(label, fontsize=9, fontweight='bold', pad=5)
-        style_loss(ax_loss)
+        # ── Column title (left-aligned to column) ────────────────────────
+        fig.text(col_left, title_y, f'{LABELS[col_idx]}  {label}',
+                 fontsize=9.5, va='bottom', ha='left', color='black')
 
-        # ── W insets: evenly spaced across top of loss panel ─────────────
-        W_data = [w_field(w_net, w_params, tf, cfg) for tf in W_T_FRACS]
-        vmin = min(W.min() for _, _, W in W_data)
-        vmax = max(W.max() for _, _, W in W_data)
+        # ── W panels ─────────────────────────────────────────────────────
+        W_data = [w_field(w_net, w_params, tf, cfg) for tf in T_FRACS]
 
-        # Space n_w insets evenly, leaving a small margin on each side
-        margin = 0.02
-        total_space = 1.0 - 2 * margin - n_w * INSET_W
-        gap = total_space / (n_w - 1)
+        # Use the last panel (strongest structure) for color range
+        _, _, W_last = W_data[-1]
+        v_lo = float(np.percentile(W_last, 2))
+        v_hi = float(np.percentile(W_last, 98))
+        global_vlo = min(global_vlo, v_lo)
+        global_vhi = max(global_vhi, v_hi)
 
-        for wi, ((xx, yy, W), tf) in enumerate(zip(W_data, W_T_FRACS)):
-            x_c = margin + wi * (INSET_W + gap)
-            ax_in = ax_loss.inset_axes([x_c, INSET_Y, INSET_W, INSET_H])
-            ax_in.pcolormesh(xx, yy, W, cmap=CMAP_W, shading='nearest',
-                             vmin=vmin, vmax=vmax, rasterized=True)
-            style_spatial(ax_in)
+        pw = (col_right - col_left - 0.01 * (n_t - 1)) / n_t
+        for wi, ((xx, yy, W), tf) in enumerate(zip(W_data, T_FRACS)):
+            ax_l = col_left + wi * (pw + 0.01)
+            ax = fig.add_axes([ax_l, w_bot, pw, in2frac(panel_h)])
+            pcm = ax.pcolormesh(xx, yy, W, cmap=CMAP_W, shading='nearest',
+                                vmin=v_lo, vmax=v_hi, rasterized=True)
+            style_spatial(ax)
+            ax.set_title(f'$t={tf:.1f}$', fontsize=7, pad=2, color='black')
+            all_pcolormeshes.append(pcm)
 
-            # t label just above each inset
-            ax_loss.text(x_c + INSET_W / 2, INSET_Y + INSET_H + 0.02,
-                         f'$t={tf:.2f}$',
-                         transform=ax_loss.transAxes,
-                         ha='center', va='bottom', fontsize=5.5, color='#333333')
-
-        # Section label above the inset strip, centered
-        ax_loss.text(0.5, INSET_Y + INSET_H + 0.10,
-                     r'$W(x,\,t)$',
-                     transform=ax_loss.transAxes,
-                     ha='center', va='bottom', fontsize=7,
-                     color='#444444', style='italic')
-
-        # ── Generative process panels ─────────────────────────────────────
-        gen_gs = gridspec.GridSpecFromSubplotSpec(
-            1, n_gen, subplot_spec=col_gs[1], wspace=0.06,
-        )
-
+        # ── Gen panels ───────────────────────────────────────────────────
         traj, key = generative_traj(rollout, w_params, cfg, key)
-        n_frames  = traj.shape[0]
-        frames    = [int(f * (n_frames - 1)) for f in GEN_T_FRACS]
+        n_frames = traj.shape[0]
+        frames   = [int(f * (n_frames - 1)) for f in T_FRACS]
 
-        for gi, (fi, tf) in enumerate(zip(frames, GEN_T_FRACS)):
-            ax = fig.add_subplot(gen_gs[gi])
+        for gi, (fi, tf) in enumerate(zip(frames, T_FRACS)):
+            ax_l = col_left + gi * (pw + 0.01)
+            ax = fig.add_axes([ax_l, gen_bot, pw, in2frac(panel_h)])
             pts = traj[fi]
             ax.scatter(pts[:, 0], pts[:, 1],
-                       s=0.5, color=COLOR_PART, alpha=0.45, rasterized=True,
+                       s=0.4, color=COLOR_PART, alpha=0.45, rasterized=True,
                        linewidths=0)
             ax.set_xlim(-L, L)
             ax.set_ylim(-L, L)
             style_spatial(ax)
-            ax.set_title(f'$t={tf:.1f}$', fontsize=6, pad=2)
 
-            if gi == 0:
-                ax.text(0.0, 1.18, 'Generative process',
-                        transform=ax.transAxes,
-                        fontsize=6.5, color='#444444', style='italic', va='bottom')
+        # ── Loss curve ───────────────────────────────────────────────────
+        ax_loss = fig.add_axes([col_left, loss_bot, col_right - col_left, in2frac(loss_h_in)])
+        raw = np.array(loss_lst)
+        sm  = smooth(raw)
+        ax_loss.plot(raw, color=COLOR_LOSS, alpha=0.15, linewidth=0.4)
+        ax_loss.plot(np.arange(len(sm)) + SMOOTH_WIN // 2, sm,
+                     color=COLOR_LOSS, linewidth=1.0)
+        ax_loss.set_xlim(0, len(raw))
+        y_max = float(np.max(sm)) * 1.15
+        ax_loss.set_ylim(0, y_max)
+        ax_loss.set_xlabel('Epoch', fontsize=8, labelpad=2, color='black')
+        ax_loss.yaxis.set_major_locator(plt.MultipleLocator(0.2))
+        ax_loss.grid(True, which='major', linewidth=0.4, alpha=0.25, color='#888888')
+
+        if col_idx == 0:
+            ax_loss.set_ylabel(r'$\mathcal{L}$', fontsize=9, labelpad=2, color='black')
+        else:
+            ax_loss.set_yticklabels([])
+
+        for sp in ax_loss.spines.values():
+            sp.set_linewidth(0.5)
+            sp.set_color('black')
+        ax_loss.tick_params(labelsize=7, width=0.5, colors='black')
+
+    # ── Unified colorbar (horizontal, spanning full width below W panels) ─
+    cbar_left = margin_l + 0.15
+    cbar_right = 1.0 - margin_r - 0.15
+    cbar_ax = fig.add_axes([cbar_left, cbar_bot, cbar_right - cbar_left, in2frac(0.06)])
+    norm = mcolors.Normalize(vmin=global_vlo, vmax=global_vhi)
+    sm_cbar = cm.ScalarMappable(cmap=CMAP_W, norm=norm)
+    sm_cbar.set_array([])
+    cbar = fig.colorbar(sm_cbar, cax=cbar_ax, orientation='horizontal')
+    cbar.ax.tick_params(labelsize=6.5, width=0.4, colors='black')
+    cbar.set_label('$W(x, t)$', fontsize=8, color='black', labelpad=1)
+    cbar.outline.set_linewidth(0.4)
 
     return fig
 
