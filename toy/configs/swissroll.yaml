@@ -9,7 +9,7 @@ guidance_strength: 2.0
 L: 5.0
 beta: 0.1
 lr: 1.0e-3
-total_epochs: 2001
+total_epochs: 1000
 
 target_pos: [0.0, 0.0]
 ns_minval: -5.0
