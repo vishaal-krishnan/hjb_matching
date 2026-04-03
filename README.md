@@ -11,14 +11,16 @@ hjb_matching/
 │   │   ├── 4gaussian.yaml
 │   │   ├── two_moon.yaml
 │   │   ├── swissroll.yaml
-│   │   └── lensing.yaml
-│   ├── distributions.py    # Sampling functions for target distributions
+│   │   ├── lensing.yaml
+│   │   ├── lensing_concave.yaml
+│   │   ├── lensing_convex.yaml
+│   │   ├── lensing_flat.yaml
+│   │   └── lensing_uncontrolled.yaml
+│   ├── distributions.py    # Sampling functions and cost profiles (nu)
 │   ├── model.py            # Neural network architectures (Haiku)
 │   ├── train.py            # Training loop and loss functions
 │   ├── plot.py             # Visualization utilities
-│   ├── run.py              # Entry point for training
-│   ├── fig_paper.py        # Paper figure generation
-│   └── make_figures.py     # Per-experiment figure generation
+│   └── run.py              # Entry point for training
 ├── mnist/                  # MNIST experiment (PyTorch)
 │   ├── configs/
 │   │   └── mnist.yaml
@@ -26,7 +28,8 @@ hjb_matching/
 │   ├── train.py            # Training and sampling
 │   └── run.py              # Entry point
 ├── notebooks/              # Colab notebooks
-│   └── toy_experiments.ipynb
+│   ├── toy_experiments.ipynb
+│   └── lensing_experiments.ipynb
 ├── requirements.txt
 └── README.md
 ```
@@ -54,34 +57,29 @@ Each toy experiment is configured via a YAML file. To train:
 python -m toy.run --config toy/configs/4gaussian.yaml
 python -m toy.run --config toy/configs/two_moon.yaml
 python -m toy.run --config toy/configs/swissroll.yaml
-python -m toy.run --config toy/configs/lensing.yaml
 ```
 
 Training outputs (model weights, loss history, config) are saved to `toy/outputs/<experiment>/`.
 
+### Lensing Experiments
+
+The lensing experiments demonstrate geometric control of stochastic transport via spatial cost fields. Four variants are provided:
+
+```bash
+python -m toy.run --config toy/configs/lensing_uncontrolled.yaml
+python -m toy.run --config toy/configs/lensing_flat.yaml
+python -m toy.run --config toy/configs/lensing_concave.yaml
+python -m toy.run --config toy/configs/lensing_convex.yaml
+```
+
 ### Running on Google Colab
 
-For GPU-accelerated training, use the provided notebook:
+For GPU-accelerated training, use the provided notebooks:
 
-1. Open `notebooks/toy_experiments.ipynb` in Google Colab
-2. Select a GPU runtime
-3. Run all cells
+- `notebooks/toy_experiments.ipynb` — trains all toy experiments (4 Gaussians, Two Moons, Swiss Roll)
+- `notebooks/lensing_experiments.ipynb` — trains all 4 lensing variants
 
-The notebook trains all toy experiments and provides a zip download of the outputs.
-
-### Generating Figures
-
-After training, generate per-experiment figures:
-
-```bash
-python -m toy.make_figures --outputs toy/outputs/4gaussians
-```
-
-Generate the paper figure (requires outputs from multiple experiments):
-
-```bash
-python -m toy.fig_paper
-```
+Open in Colab, select a GPU runtime, and run all cells. Outputs are zipped for download.
 
 ### MNIST Experiment
 
@@ -98,6 +96,19 @@ Requires a CUDA-capable GPU.
 | 4 Gaussians | `four_gaussian` | `toy/configs/4gaussian.yaml` | Mixture of 4 Gaussians |
 | Two Moons | `two_moon` | `toy/configs/two_moon.yaml` | Two crescent moons |
 | Swiss Roll | `swissroll` | `toy/configs/swissroll.yaml` | Swiss roll manifold |
-| Lensing | `lensing` | `toy/configs/lensing.yaml` | Gravitational lensing (analytical nu) |
+| Lensing (uncontrolled) | `single_gaussian` | `toy/configs/lensing_uncontrolled.yaml` | No cost field (baseline) |
+| Lensing (flat) | `single_gaussian` | `toy/configs/lensing_flat.yaml` | Uniform cost field |
+| Lensing (concave) | `single_gaussian` | `toy/configs/lensing_concave.yaml` | Attractive potential well |
+| Lensing (convex) | `single_gaussian` | `toy/configs/lensing_convex.yaml` | Repulsive potential barrier |
 | MNIST | — | `mnist/configs/mnist.yaml` | MNIST digit generation |
 
+## Citation
+
+```bibtex
+@inproceedings{sinha2025hjb,
+  title={HJB Matching: Generative Modeling via Hamilton-Jacobi-Bellman Optimal Control},
+  author={Sinha, Sumit},
+  booktitle={NeurIPS},
+  year={2025}
+}
+```
