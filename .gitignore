@@ -15,3 +15,6 @@ build/
 ckpt.pth
 toy/outputs/
 mnist/outputs/
+toy/fig_paper.py
+toy/fig_lensing.py
+toy/make_figures.py
