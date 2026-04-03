@@ -39,6 +39,7 @@ def single_gaussian(key, N, mean=(-1.0, 0.0), std=0.1):
 
 
 def nu_lensing(x, means=[(0.0, 0.0)], std=0.1):
+    """Concave lens: attractive well at each mean (particles bend toward lens)."""
     x = jnp.atleast_2d(x)
     nu = jnp.zeros(x.shape[0])
     for mean in means:
@@ -46,6 +47,23 @@ def nu_lensing(x, means=[(0.0, 0.0)], std=0.1):
         exponent = -0.5 * jnp.sum(diff ** 2, axis=-1)
         nu = nu + jnp.exp(exponent)
     return 1.0 - 20 * nu
+
+
+def nu_convex(x, means=[(0.0, 0.0)], std=0.1):
+    """Convex lens: repulsive barrier at each mean (particles bend away from lens)."""
+    x = jnp.atleast_2d(x)
+    nu = jnp.zeros(x.shape[0])
+    for mean in means:
+        diff = (x - jnp.array(mean)) / std
+        exponent = -0.5 * jnp.sum(diff ** 2, axis=-1)
+        nu = nu + jnp.exp(exponent)
+    return 1.0 + 20 * nu
+
+
+def nu_flat(x, **kwargs):
+    """Flat profile: uniform cost everywhere (no lens effect)."""
+    x = jnp.atleast_2d(x)
+    return jnp.ones(x.shape[0])
 
 
 DISTRIBUTIONS = {

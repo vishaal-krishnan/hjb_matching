@@ -4,7 +4,13 @@ import jax
 import jax.numpy as jnp
 import optax
 
-from toy.distributions import DISTRIBUTIONS, nu_lensing
+from toy.distributions import DISTRIBUTIONS, nu_lensing, nu_convex, nu_flat
+
+NU_FUNCTIONS = {
+    'concave': nu_lensing,
+    'convex': nu_convex,
+    'flat': nu_flat,
+}
 from toy.model import build_w_net
 from toy.train import build_train_fns
 from toy.plot import plot_training_progress, animate_w_field, make_video, save_combined_snapshots
@@ -23,7 +29,11 @@ def main():
 
     # --- Distribution ---
     init_sample = DISTRIBUTIONS[cfg['distribution']]
-    nu_fn = nu_lensing if cfg.get('use_analytical_nu', False) else None
+    if cfg.get('use_analytical_nu', False):
+        nu_type = cfg.get('nu_type', 'concave')
+        nu_fn = NU_FUNCTIONS[nu_type]
+    else:
+        nu_fn = None
     target_pos = jnp.array([cfg['target_pos']])
 
     # --- Model ---

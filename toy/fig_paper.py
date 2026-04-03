@@ -1,10 +1,9 @@
 """
 NeurIPS-style paper figure.
 
-Each experiment is a column with 3 rows:
-  Row 0: W(x,t) panels
-  Row 1: Generative process panels
-  Row 2: Learning curve
+3x3 grid: rows = Learned W, Generative process, Learning curve
+          cols = experiments
+Row labels on left (vertical), colorbar as vertical bar to right of W row.
 
 Usage:
     python -m toy.fig_paper
@@ -14,7 +13,6 @@ import pickle, yaml
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import numpy as np
@@ -96,31 +94,26 @@ def build():
     n_exp = len(EXPERIMENTS)
     n_t   = len(T_FRACS)
 
-    # ── Compute dimensions from content ──────────────────────────────────
-    fig_w = 6.75                      # NeurIPS full width
-    margin_l, margin_r = 0.06, 0.02   # figure fraction
-    col_wspace = 0.10                  # figure fraction between columns
-    usable_w = fig_w * (1.0 - margin_l - margin_r - col_wspace * (n_exp - 1) / n_exp)
-    col_w = usable_w / n_exp
-    panel_inner_wspace = 0.06
-    panel_w = col_w / (n_t + (n_t - 1) * panel_inner_wspace * 0.3)
-    panel_h = panel_w                  # square
+    fig_w = 6.75
+    margin_l = 0.09   # room for vertical row labels
+    margin_r = 0.02
+    # Column geometry
+    col_total = 1.0 - margin_l - margin_r
+    col_span = col_total / n_exp
+    panel_gap = 0.008  # gap between panels within a column
 
-    loss_h_in  = 0.95                  # loss curve height (increased)
-    header_h   = 0.18                  # row header text height
-    gap_h      = 0.06                  # gap between header and panels
-    title_h    = 0.28                  # column title height
-    bottom_h   = 0.35                  # bottom margin for epoch label
-    cbar_h     = 0.45                  # colorbar row height (bar + ticks + label)
+    # Compute panel size from column width
+    col_w_in = fig_w * col_span
+    pw_in = col_w_in / (n_t + (n_t - 1) * panel_gap / col_span)
+    panel_h_in = pw_in  # square
 
-    fig_h = (title_h
-             + 3 * header_h
-             + 2 * panel_h
-             + loss_h_in
-             + 3 * gap_h
-             + 2 * 0.04
-             + bottom_h
-             + cbar_h)
+    loss_h_in = 0.95
+    title_h   = 0.22
+    gap_w_gen = 0.03    # tiny gap between W and gen rows (inches)
+    gap_gen_loss = 0.12  # gap between gen and loss rows
+    bottom_h  = 0.35
+
+    fig_h = title_h + 2 * panel_h_in + gap_w_gen + gap_gen_loss + loss_h_in + bottom_h
 
     fig = plt.figure(figsize=(fig_w, fig_h))
     fig.patch.set_facecolor('white')
@@ -137,60 +130,35 @@ def build():
         'ytick.color': 'black',
     })
 
-    # Convert to figure fractions
     def in2frac(inches):
         return inches / fig_h
 
-    # Vertical positions (bottom-up in figure coords)
-    y_bottom = bottom_h / fig_h
-
-    # Loss row
-    loss_bot = y_bottom
+    # Vertical positions (bottom-up)
+    loss_bot = bottom_h / fig_h
     loss_top = loss_bot + in2frac(loss_h_in)
 
-    # Loss header
-    loss_hdr = loss_top + in2frac(0.04)
+    gen_bot = loss_top + in2frac(gap_gen_loss)
+    gen_top = gen_bot + in2frac(panel_h_in)
 
-    # Gen row
-    gen_bot = loss_hdr + in2frac(header_h + gap_h)
-    gen_top = gen_bot + in2frac(panel_h)
+    w_bot = gen_top + in2frac(gap_w_gen)
+    w_top = w_bot + in2frac(panel_h_in)
 
-    # Gen header
-    gen_hdr = gen_top + in2frac(0.04)
+    title_y = w_top + in2frac(0.18)
 
-    # Colorbar row (between W panels and gen header... no, below W panels)
-    # Actually place colorbar below the W panels, above gen header
-    # Let's place it right under the W row
-
-    # W row
-    w_bot = gen_hdr + in2frac(header_h + gap_h + cbar_h)
-    w_top = w_bot + in2frac(panel_h)
-
-    # Colorbar sits between W panels and gen section
-    cbar_bot = gen_hdr + in2frac(header_h + gap_h + 0.22)
-    cbar_top = cbar_bot + in2frac(0.06)
-
-    # W header
-    w_hdr = w_top + in2frac(0.14)
-
-    # Column title
-    title_y = w_hdr + in2frac(header_h + 0.02)
-
-    # ── Row headers via fig.text ─────────────────────────────────────────
-    x_left = margin_l
-    fig.text(x_left, w_hdr, 'Learned $W$',
-             fontsize=8, va='bottom', ha='left', color='black')
-    fig.text(x_left, gen_hdr, 'Generative process',
-             fontsize=8, va='bottom', ha='left', color='black')
-    fig.text(x_left, loss_hdr, 'Learning curve',
-             fontsize=8, va='bottom', ha='left', color='black')
+    # ── Row labels (vertical text, left side) ────────────────────────────
+    lbl_x = 0.005
+    lbl_cx = margin_l / 2  # center of the label column
+    # "Learned W" text + colorbar stacked tightly
+    fig.text(lbl_cx, (w_bot + w_top) / 2 + 0.04, 'Learned $W$',
+             fontsize=7.5, va='bottom', ha='center', color='black')
+    fig.text(lbl_cx, (gen_bot + gen_top) / 2, 'Generative\nprocess',
+             fontsize=7.5, va='center', ha='center', color='black',
+             linespacing=1.3)
+    # No row label for loss — the y-axis label serves that purpose
 
     key = jax.random.PRNGKey(42)
-
-    # Track global vmin/vmax for unified colorbar
     global_vlo = np.inf
     global_vhi = -np.inf
-    all_pcolormeshes = []
 
     for col_idx, (label, path) in enumerate(EXPERIMENTS):
         w_params, loss_lst, cfg = load_run(path)
@@ -201,44 +169,40 @@ def build():
         fns     = build_train_fns(w_net, optax.adam(cfg['lr']), cfg, nu_fn=nu_fn)
         rollout = fns['rollout']
 
-        # Column horizontal bounds
-        col_total = (1.0 - margin_l - margin_r)
-        col_span = col_total / n_exp
         col_left = margin_l + col_idx * col_span
-        col_right = col_left + col_span * 0.92
+        col_right = col_left + col_span - 0.025  # inter-column gap
 
-        # ── Column title (left-aligned to column) ────────────────────────
+        # ── Column title ─────────────────────────────────────────────────
         fig.text(col_left, title_y, f'{LABELS[col_idx]}  {label}',
                  fontsize=9.5, va='bottom', ha='left', color='black')
 
         # ── W panels ─────────────────────────────────────────────────────
         W_data = [w_field(w_net, w_params, tf, cfg) for tf in T_FRACS]
-
-        # Use the last panel (strongest structure) for color range
         _, _, W_last = W_data[-1]
         v_lo = float(np.percentile(W_last, 2))
         v_hi = float(np.percentile(W_last, 98))
         global_vlo = min(global_vlo, v_lo)
         global_vhi = max(global_vhi, v_hi)
 
-        pw = (col_right - col_left - 0.01 * (n_t - 1)) / n_t
+        pw = (col_right - col_left - panel_gap * (n_t - 1)) / n_t
+        ph = in2frac(panel_h_in)
+
         for wi, ((xx, yy, W), tf) in enumerate(zip(W_data, T_FRACS)):
-            ax_l = col_left + wi * (pw + 0.01)
-            ax = fig.add_axes([ax_l, w_bot, pw, in2frac(panel_h)])
-            pcm = ax.pcolormesh(xx, yy, W, cmap=CMAP_W, shading='nearest',
-                                vmin=v_lo, vmax=v_hi, rasterized=True)
+            ax_l = col_left + wi * (pw + panel_gap)
+            ax = fig.add_axes([ax_l, w_bot, pw, ph])
+            ax.pcolormesh(xx, yy, W, cmap=CMAP_W, shading='nearest',
+                          vmin=v_lo, vmax=v_hi, rasterized=True)
             style_spatial(ax)
             ax.set_title(f'$t={tf:.1f}$', fontsize=7, pad=2, color='black')
-            all_pcolormeshes.append(pcm)
 
-        # ── Gen panels ───────────────────────────────────────────────────
+        # ── Gen panels (directly below W, same horizontal positions) ─────
         traj, key = generative_traj(rollout, w_params, cfg, key)
         n_frames = traj.shape[0]
         frames   = [int(f * (n_frames - 1)) for f in T_FRACS]
 
         for gi, (fi, tf) in enumerate(zip(frames, T_FRACS)):
-            ax_l = col_left + gi * (pw + 0.01)
-            ax = fig.add_axes([ax_l, gen_bot, pw, in2frac(panel_h)])
+            ax_l = col_left + gi * (pw + panel_gap)
+            ax = fig.add_axes([ax_l, gen_bot, pw, ph])
             pts = traj[fi]
             ax.scatter(pts[:, 0], pts[:, 1],
                        s=0.4, color=COLOR_PART, alpha=0.45, rasterized=True,
@@ -247,7 +211,7 @@ def build():
             ax.set_ylim(-L, L)
             style_spatial(ax)
 
-        # ── Loss curve ───────────────────────────────────────────────────
+        # ── Loss curve (aligned with panels above) ─────────────────────
         ax_loss = fig.add_axes([col_left, loss_bot, col_right - col_left, in2frac(loss_h_in)])
         raw = np.array(loss_lst)
         sm  = smooth(raw)
@@ -259,10 +223,11 @@ def build():
         ax_loss.set_ylim(0, y_max)
         ax_loss.set_xlabel('Epoch', fontsize=8, labelpad=2, color='black')
         ax_loss.yaxis.set_major_locator(plt.MultipleLocator(0.2))
+        ax_loss.xaxis.set_major_locator(plt.MaxNLocator(nbins=5, integer=True))
         ax_loss.grid(True, which='major', linewidth=0.4, alpha=0.25, color='#888888')
 
         if col_idx == 0:
-            ax_loss.set_ylabel(r'$\mathcal{L}$', fontsize=9, labelpad=2, color='black')
+            ax_loss.set_ylabel(r'Total Loss $\mathcal{L}$', fontsize=8, labelpad=2, color='black')
         else:
             ax_loss.set_yticklabels([])
 
@@ -271,17 +236,20 @@ def build():
             sp.set_color('black')
         ax_loss.tick_params(labelsize=7, width=0.5, colors='black')
 
-    # ── Unified colorbar (horizontal, spanning full width below W panels) ─
-    cbar_left = margin_l + 0.15
-    cbar_right = 1.0 - margin_r - 0.15
-    cbar_ax = fig.add_axes([cbar_left, cbar_bot, cbar_right - cbar_left, in2frac(0.06)])
+    # ── Horizontal colorbar under "Learned W" label in left margin ───────
+    cbar_margin = 0.005
+    cbar_left_pos = cbar_margin
+    cbar_width = margin_l - 2 * cbar_margin
+    cbar_h_frac = 0.015
+    cbar_bot_pos = (w_bot + w_top) / 2 + 0.015
+    cbar_ax = fig.add_axes([cbar_left_pos, cbar_bot_pos, cbar_width, cbar_h_frac])
     norm = mcolors.Normalize(vmin=global_vlo, vmax=global_vhi)
     sm_cbar = cm.ScalarMappable(cmap=CMAP_W, norm=norm)
     sm_cbar.set_array([])
     cbar = fig.colorbar(sm_cbar, cax=cbar_ax, orientation='horizontal')
-    cbar.ax.tick_params(labelsize=6.5, width=0.4, colors='black')
-    cbar.set_label('$W(x, t)$', fontsize=8, color='black', labelpad=1)
-    cbar.outline.set_linewidth(0.4)
+    cbar.ax.tick_params(labelsize=5, width=0.3, colors='black', pad=1)
+    cbar.ax.xaxis.set_major_locator(plt.MaxNLocator(nbins=3))
+    cbar.outline.set_linewidth(0.3)
 
     return fig
 
